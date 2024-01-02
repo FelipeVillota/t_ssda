@@ -1,0 +1,2080 @@
+---
+title: "t_ssda"
+by: "Luis Felipe Villota Macías"
+output: html_document
+date: "2023-05-22"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1. Setting the working directory
+
+```{r}
+setwd("F:/t/")
+
+getwd()
+```
+
+## 2. Loading initial packages
+
+```{r include=FALSE}
+library(stringr)
+library(ggplot2)
+library(forcats)
+library(tidyverse)
+library(tidytext)
+library(tm)
+library(textdata)
+library(psych)
+library(skimr)
+library(wordcloud2)
+library(tidyr)
+library(lifecycle)
+library(scales)
+library(Amelia)
+library(igraph)
+library(lubridate)
+library(data.table)
+library(patchwork)
+library(dlookr)
+library(naniar)
+library(corrplot)
+library(reshape2)
+library(gridExtra)
+library(readr)
+library(pscl)
+library(lmtest) 
+library(sjPlot)
+library(finalfit)
+library(dplyr)
+library(knitr)
+library(textdata)
+library(caret)
+```
+
+## 3. Loading Set B
+
+```{r}
+set_B <- fread("F:/t/all_comments.csv")
+```
+
+##### EDA: Set B
+
+```{r}
+str(set_B) # 6,217,154 obs. of  38 variables
+
+attributes(set_B)
+
+# Column names
+colnames(set_B)
+
+head(set_B)
+
+
+length(unique(set_B$page_name)) # 565 unique pages
+length(unique(set_B$category)) # 82 different page categories
+length(unique(set_B$id_post)) # 72,441 unique posts
+length(unique(set_B$id_comment)) # 6,217,154 unique comments
+length(unique(set_B$location_json)) # 336 unique page locations
+
+
+# Checking for missing values
+
+any(is.na(set_B)) # TRUE
+sum(is.na(set_B)) # 11,686,900 cases in total
+colSums(is.na(set_B)) # distribution of missing values by variable 
+colnames(set_B)[colSums(is.na(set_B)) > 0] # NAs in 8 var.: "score_0_disagreement", "score_1_disagreement", "score_0_antagonism", "score_1_antagonism","disagreement","antagonism"           "comment_count","page_like_count"
+
+
+
+# Time span of posts
+min(set_B$created_time_post) # Earliest = 2016-01-03 23:01:49
+max(set_B$created_time_post) # Latest = 2022-06-24 13:47:14
+
+# Time span of comments
+min(set_B$created_time_comment) # Earliest = 2016-01-04 00:28:11
+max(set_B$created_time_comment) # Latest = 2022-10-23 06:57:17
+
+# Reactions on posts
+
+min_max_table_rp <- set_B %>%
+  summarize(
+    love_post_min = min(love_post),
+    love_post_max = max(love_post),
+    like_post_min = min(like_post),
+    like_post_max = max(like_post),
+    angry_post_min = min(angry_post),
+    angry_post_max = max(angry_post),
+    sad_post_min = min(sad_post),
+    sad_post_max = max(sad_post),
+    haha_post_min = min(haha_post),
+    haha_post_max = max(haha_post),
+    wow_post_min = min(wow_post),
+    wow_post_max = max(wow_post),
+    shares_min = min(shares),
+    shares_max = max(shares)
+  )
+
+min_max_table_rp
+
+
+# Reactions on comments
+
+min_max_table_rc <- set_B %>%
+  summarize(
+    love_comment_min = min(love_comment),
+    love_comment_max = max(love_comment),
+    like_comment_min = min(like_comment),
+    like_comment_max = max(like_comment),
+    angry_comment_min = min(angry_comment),
+    angry_comment_max = max(angry_comment),
+    sad_comment_min = min(sad_comment),
+    sad_comment_max = max(sad_comment),
+    haha_comment_min = min(haha_comment),
+    haha_comment_max = max(haha_comment),
+    wow_comment_min = min(wow_comment),
+    wow_comment_max = max(wow_comment)
+  )
+
+min_max_table_rc
+
+
+# The Facebook public fan page with more likes = Noticias Caracol with 6,395,004 likes
+max_row <- set_B[which.max(set_B$page_like_count), ]
+max_page_name <- max_row$page_name
+max_page_like_count <- max_row$page_like_count
+cat("The page with the maximum page_like_count is", max_page_name, "with", max_page_like_count, "likes.")
+
+# And the least liked page = Diego Patiño Amariles with 187 likes
+min_row <- set_B[which.min(set_B$page_like_count), ]
+min_page_name <- min_row$page_name
+min_page_like_count <- min_row$page_like_count
+cat("The page with the minimum page_like_count is", min_page_name, "with", min_page_like_count, "likes.")
+
+# The most liked post message by a page =
+# A la Nación colombiana. Al soldado, al policía, al manifestante; al Comité de Paro, al presidente Duque. Esta es mi segunda alocución sobre la situación nacional. By Gustavo Petro with 145,955 likes.
+max_row_post <- set_B[which.max(set_B$like_post), ]
+max_post_message <- max_row_post$post_message
+max_post_like_count <- max_row_post$like_post
+max_post_page_name <- max_row_post$page_name
+cat("The post message with the maximum like count is", max_post_message, "with", max_post_like_count, "likes by", max_post_page_name)
+
+
+# And the least liked post by a page =
+# #editorialelnuevoliberal A cuidarse no solo de los contagios http://ow.ly/kECO50G8VdE By Periódico El Nuevo Liberal with 0 likes 
+min_row_post <- set_B[which.min(set_B$like_post), ]
+min_post_message <- min_row_post$post_message
+min_post_like_count <- min_row_post$like_post
+min_post_page_name <- min_row_post$page_name
+cat("The post message with the minimum like count is", min_post_message, "with", min_post_like_count, "likes by", min_post_page_name)
+
+# How many posts have 0 likes ?
+
+set_B %>% filter(like_post == 0) %>% nrow() # Only 489 out of 72,441 
+
+# The post by a page with the most "angry" reactions =
+# El presidente Iván Duque se pronunció sobre los hechos violentos que se han presentado en las diferentes ciudades de Colombia debido al Paro Nacional. Aseguró estos se han presentado en mayor medida por parte de vándalos y que la labor de los policías es la de cuidar a los ciudadanos, por lo que se deben presentar denuncias "si llega a haber algún tipo de abuso". "En nuestra democracia se puede alzar la voz pero no se puede empuñar un arma para acallarla", añadió. By El Espectador with 58,613 angry reactions.
+
+max_row_post_angry <- set_B[which.max(set_B$angry_post), ]
+max_post_message_angry <- max_row_post_angry$post_message
+max_post_angry_count_angry <- max_row_post_angry$angry_post
+max_post_page_name_angry <- max_row_post_angry$page_name
+cat("The post message with the maximum angry count is", max_post_message_angry,"by", max_post_page_name_angry, "with", max_post_angry_count_angry, "angry reactions.")
+```
+
+##### Dates: Set B
+
+```{r}
+
+
+# Both post and comments are to be changed into POSIXct format "%Y-%m-%d %H:%M:%S"
+
+set_B$created_time_comment <- as.POSIXct(set_B$created_time_comment, format = "%Y-%m-%d %H:%M:%S")
+
+set_B$created_time_post <- as.POSIXct(set_B$created_time_comment, format = "%Y-%m-%d %H:%M:%S")
+
+class(set_B$created_time_comment)
+class(set_B$created_time_post)
+
+```
+
+## 5. Set C: news media entities
+
+```{r}
+
+set_C <- subset(set_B, 
+                 category %in% c("Newspaper",
+                                 "Tv-kanal",
+                                 "Medier/nyheder",
+                                 "TV Network",
+                                 "Media/News Company",
+                                 "Nyheds- og mediewebsite",
+                                 "Tidsskrift",
+                                 "Radiostation",
+                                 "Avis",
+                                 "News & media website",
+                                 "Radio station",
+                                 "Medie-/nyhetsbedrift",
+                                 "Udsendelses- og medieproduktionsselskab",
+                                 "Media/news company",
+                                 "Kringkastings- og medieproduksjonsselskap",
+                                 "Medier",
+                                 "News & Media Website",
+                                 "TV-kanal",
+                                 "Radiokanal"))
+
+               
+```
+
+```{r}
+
+# Loading  sub-setted dataset in my PC
+
+set_C <- fread("F:/t/nm_ent.csv")
+
+```
+
+##### EDA: Set C
+
+```{r}
+
+
+str(set_C) # 1966687 obs. of  38 variables
+attributes(set_C)
+length(unique(set_C$page_name)) # 64 unique pages
+length(unique(set_C$category)) # 19 different page categories
+length(unique(set_C$id_post)) # 17672 unique posts
+length(unique(set_C$id_comment)) # 1966687 unique comments
+length(unique(set_C$location_json)) # 52 unique page locations
+any(is.na(set_C)) # TRUE
+sum(is.na(set_C)) # 3,335,919 NAs
+colSums(is.na(set_C)) # NAs in score_0_antagonism, score_1_antagonism, antagonism, comment_count 
+
+# Time span of posts
+min(set_C$created_time_post) # Earliest = "2016-08-17 02:39:28 UTC"
+max(set_C$created_time_post) # Latest = "2022-06-24 13:47:14 UTC"
+
+# Time span of comments
+min(set_C$created_time_comment) # Earliest = "2016-08-17 04:03:29 UTC"
+max(set_C$created_time_comment) # Latest = "2022-10-19 00:26:13 UTC"
+
+# Reactions on posts
+
+min_max_table_rp <- set_C %>%
+  summarize(
+    love_post_min = min(love_post),
+    love_post_max = max(love_post),
+    like_post_min = min(like_post),
+    like_post_max = max(like_post),
+    angry_post_min = min(angry_post),
+    angry_post_max = max(angry_post),
+    sad_post_min = min(sad_post),
+    sad_post_max = max(sad_post),
+    haha_post_min = min(haha_post),
+    haha_post_max = max(haha_post),
+    wow_post_min = min(wow_post),
+    wow_post_max = max(wow_post),
+    shares_min = min(shares),
+    shares_max = max(shares)
+  )
+
+min_max_table_rp
+
+
+# Reactions on comments
+
+min_max_table_rc <- set_C %>%
+  summarize(
+    love_comment_min = min(love_comment),
+    love_comment_max = max(love_comment),
+    like_comment_min = min(like_comment),
+    like_comment_max = max(like_comment),
+    angry_comment_min = min(angry_comment),
+    angry_comment_max = max(angry_comment),
+    sad_comment_min = min(sad_comment),
+    sad_comment_max = max(sad_comment),
+    haha_comment_min = min(haha_comment),
+    haha_comment_max = max(haha_comment),
+    wow_comment_min = min(wow_comment),
+    wow_comment_max = max(wow_comment)
+  )
+
+min_max_table_rc
+
+
+# The Facebook public fan page with more likes = Noticias Caracol with 6,395,004 likes
+max_row <- set_C[which.max(set_C$page_like_count), ]
+max_page_name <- max_row$page_name
+max_page_like_count <- max_row$page_like_count
+cat("The page with the maximum page_like_count is", max_page_name, "with", max_page_like_count, "likes.")
+
+# And the least liked page = Comité Nacional de Paro with 1748 likes
+min_row <- set_C[which.min(set_C$page_like_count), ]
+min_page_name <- min_row$page_name
+min_page_like_count <- min_row$page_like_count
+cat("The page with the minimum page_like_count is", min_page_name, "with", min_page_like_count, "likes.")
+
+# The post message with the maximum like count is #LaPulla El autoritarismo de Iván Duque no es solo de ahora. Dejemos de tratarlo como si fuera un títere que no tiene responsabilidad por lo que hace. Nuestro presidente quiere elegir a quienes lo juzgan, ha metido las narices en decisiones judiciales, tiene un programa dedicado a hacerse autobombo, cultiva amigos en los entes de control y reprime la protesta. Aquí les contamos. with 76036 likes by El Espectador
+max_row_post <- set_C[which.max(set_C$like_post), ]
+max_post_message <- max_row_post$post_message
+max_post_like_count <- max_row_post$like_post
+max_post_page_name <- max_row_post$page_name
+cat("The post message with the maximum like count is", max_post_message, "with", max_post_like_count, "likes by", max_post_page_name)
+
+
+# And the least liked post by a page =
+# #editorialelnuevoliberal A cuidarse no solo de los contagios http://ow.ly/kECO50G8VdE By Periódico El Nuevo Liberal with 0 likes 
+min_row_post <- set_C[which.min(set_C$like_post), ]
+min_post_message <- min_row_post$post_message
+min_post_like_count <- min_row_post$like_post
+min_post_page_name <- min_row_post$page_name
+cat("The post message with the minimum like count is", min_post_message, "with", min_post_like_count, "likes by", min_post_page_name)
+
+# How many posts have 0 likes ?
+
+set_C %>% filter(like_post == 0) %>% nrow() # Only 223 out of 17,672
+
+# How many posts have have 0 comments ?
+
+set_C %>% filter(comment_count == 0) %>% nrow() # all have comments
+
+
+# The post by a page with the most "angry" reactions =
+# El presidente Iván Duque se pronunció sobre los hechos violentos que se han presentado en las diferentes ciudades de Colombia debido al Paro Nacional. Aseguró estos se han presentado en mayor medida por parte de vándalos y que la labor de los policías es la de cuidar a los ciudadanos, por lo que se deben presentar denuncias "si llega a haber algún tipo de abuso". "En nuestra democracia se puede alzar la voz pero no se puede empuñar un arma para acallarla", añadió. By El Espectador with 58,613 angry reactions.
+
+max_row_post_angry <- set_C[which.max(set_C$angry_post), ]
+max_post_message_angry <- max_row_post_angry$post_message
+max_post_angry_count_angry <- max_row_post_angry$angry_post
+max_post_page_name_angry <- max_row_post_angry$page_name
+cat("The post message with the maximum angry count is", max_post_message_angry,"by", max_post_page_name_angry, "with", max_post_angry_count_angry, "angry reactions.")
+
+```
+
+## 6. Set D: disagreements
+
+```{r}
+
+set_D <- set_C %>%
+  filter(set_C$label_disagreement != "not disagreement")
+
+```
+
+##### EDA: Set D
+
+```{r}
+
+
+str(set_D) # 1,361,291 obs. of  38 variables
+attributes(set_D)
+length(unique(set_D$page_name)) # 64 unique pages
+length(unique(set_D$category)) # 19 different page categories
+length(unique(set_D$id_post)) # 16,146 unique posts
+length(unique(set_D$id_comment)) # 1,361,291 unique comments
+length(unique(set_D$location_json)) # 52 -> 22 unique page locations
+any(is.na(set_D)) # TRUE
+sum(is.na(set_D)) # 1,057,100 NAs
+colSums(is.na(set_D)) # NAs in comment_count 
+
+set_D %>%
+        diagnose() %>%
+        select(-unique_count, -unique_rate) %>% 
+        filter(missing_count > 0) %>% 
+        arrange(desc(missing_count))
+
+# Time span of posts
+min(set_D$created_time_post) # Earliest = "2017-01-10 16:34:07 UTC"
+max(set_D$created_time_post) # Latest = "2022-06-24 13:47:14 UTC"
+
+# Time span of comments
+min(set_D$created_time_comment) # Earliest = "2017-01-10 18:08:03 UTC"
+max(set_D$created_time_comment) # Latest = "2022-10-19 00:26:13 UTC"
+
+```
+
+##### Histograms B, C, D: distribution of posts and comments per day; (2016 - 2022) (before any transformation or cleaning)
+
+```{r}
+
+# Posts per day SET B
+plot_unique_posts_setB <- set_B %>% distinct(created_time_post)
+
+plot1 <- ggplot(plot_unique_posts_setB, aes(x = as.Date(created_time_post), group = 1)) +
+  geom_histogram(stat = "count", color = "black") +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year", limits = as.Date(c("2016-01-01", "2022-12-31"))) +
+  labs(x = "Year", y = "Daily volume") +
+  ggtitle("Set B: Creation of Unique Posts (N= 72,441)") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fill = "white")) +          
+  coord_cartesian(ylim = c(0, 600))
+
+
+
+# Comments per day SET B
+
+plot2 <- ggplot(set_B, aes(x = as.Date(created_time_comment), group = 1)) +
+    geom_histogram(stat = "count", color = "blue") +
+     scale_x_date(date_labels = "%Y", date_breaks = "1 year", limits = as.Date(c("2016-01-01", "2022-12-31"))) +
+     labs(x = "Year", y = "Daily volume") +
+     ggtitle("Set B: Comments on Posts (N= 6,217,154)") +
+     theme_minimal() +
+     theme(panel.background = element_rect(fill = "white"))+
+     coord_cartesian(ylim = c(0, 200000))
+
+
+# Posts per day SET C
+plot_unique_posts_setC <- set_C %>% distinct(created_time_post)
+
+
+plot3 <- ggplot(plot_unique_posts_setC, aes(x = as.Date(created_time_post), group = 1)) +
+  geom_histogram(stat = "count", color = "black") +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year", limits = as.Date(c("2016-01-01", "2022-12-31"))) +
+  labs(x = "Year", y = "Daily volume") +
+  ggtitle("Set C: Creation of Unique News Media Posts (N= 17,672)") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fill = "white"))+          
+  coord_cartesian(ylim = c(0, 600))
+
+
+# Comments per day SET C
+
+plot4 <- ggplot(set_C, aes(x = as.Date(created_time_comment), group = 1)) +
+    geom_histogram(stat = "count", color = "blue") +
+     scale_x_date(date_labels = "%Y", date_breaks = "1 year", limits = as.Date(c("2016-01-01", "2022-12-31"))) +
+     labs(x = "Year", y = "Daily volume") +
+     ggtitle("Set C: Comments on News Media Posts (N= 1,966,687)") +
+     theme_minimal() +
+     theme(panel.background = element_rect(fill = "white"))+
+     coord_cartesian(ylim = c(0, 200000))
+
+
+# Posts per day SET D
+plot_unique_posts_setD <- set_D %>% distinct(created_time_post)
+
+
+plot5 <- ggplot(plot_unique_posts_setD, aes(x = as.Date(created_time_post), group = 1)) +
+  geom_histogram(stat = "count", color = "black") +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year", limits = as.Date(c("2016-01-01", "2022-12-31"))) +
+  labs(x = "Year", y = "Daily volume") +
+  ggtitle("Set D: Creation of Unique News Media Posts (N= 16,146 )") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fill = "white"))+          
+  coord_cartesian(ylim = c(0, 600))
+
+
+# Comments per day SET D
+
+plot6 <- ggplot(set_D, aes(x = as.Date(created_time_comment), group = 1)) +
+    geom_histogram(stat = "count", color = "blue") +
+     scale_x_date(date_labels = "%Y", date_breaks = "1 year", limits = as.Date(c("2016-01-01", "2022-12-31"))) +
+     labs(x = "Year", y = "Daily volume") +
+     ggtitle("Set D: Only Disagreements on News Media Posts (N= 1,361,291)") +
+     theme_minimal() +
+     theme(panel.background = element_rect(fill = "white"))+
+     coord_cartesian(ylim = c(0, 200000))
+
+
+# Combine the plots
+combined_plots <- plot1 + plot2 + plot3 + plot4 + plot5 + plot6 + plot_layout(ncol = 1)
+
+print(combined_plots)
+```
+
+##### Plotting missing values: B, C, D (before any transformation or cleaning)
+
+```{r}
+
+# Missing data visualization
+
+# Set B
+miss_b <- gg_miss_var(set_B) +
+  theme_minimal() +
+  labs(title = "Missing Data Visualization for Set B (N= 11,686,900)", x = "Variables", y = "Number of Missing Values") +
+  theme(
+    plot.title = element_text(size = 18),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+    axis.text.y = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    legend.position = "bottom"
+  )
+
+
+# Set C
+miss_c <- gg_miss_var(set_C) +
+  theme_minimal() +
+  labs(title = "Missing Data Visualization for Set C (N= 3,335,919)", x = "Variables", y = "Number of Missing Values") +
+  theme(
+    plot.title = element_text(size = 18),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+    axis.text.y = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    legend.position = "bottom"
+  )
+
+
+# Set D
+miss_d <- gg_miss_var(set_D) +
+  theme_minimal() +
+  labs(title = "Missing Data Visualization for Set D (N= 1,057,100 )", x = "Variables", y = "Number of Missing Values") +
+  theme(
+    plot.title = element_text(size = 18),
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+    axis.text.y = element_text(size = 12),
+    axis.title = element_text(size = 14),
+    legend.position = "bottom"
+  )
+
+
+# Missing plots Set B and C and D
+
+combined_miss_plots <- miss_b + miss_c + miss_d + plot_layout(ncol = 1)
+```
+
+##### Transformations Set D
+
+```{r}
+# Create a new column where only the city is extracted from location_json
+# There are 52 unique page locations before recoding 
+
+
+set_D$location_json <- gsub("\\{.*\"\"city\"\": \"\"Pereira\"\".*\\}", "Pereira", set_D$location_json)
+
+
+set_D$location_json[set_D$location_json == "{\"\"zip\"\": \"\"760042\"\", \"\"city\"\": \"\"Santiago de Cali\"\", \"\"street\"\": \"\"Calle 5 # 38ª – 14\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 3.4242805250049, \"\"longitude\"\": -76.545554101467}"] <- "Santiago de Cali"
+
+
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"410001\"\", \"\"city\"\": \"\"Neiva\"\", \"\"street\"\": \"\"Calle 21 #34A - 55\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 2.9417872911499, \"\"longitude\"\": -75.265316963196}"]<- "Neiva"
+                     
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"130001\"\", \"\"city\"\": \"\"Cartagena\"\", \"\"street\"\": \"\"Sector Los Cuatro Vientos, Sector LIBANO C31A, 49A-95 APTO 201\"\", \"\"country\"\": \"\"Colombia\"\"}"] <- "Cartagena"                                                                         
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\" Bogotá\"\", \"\"street\"\": \"\"Cl. 103 #69b-43\"\"}"] <- "Bogotá"                                                                                                                                                                                          
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"111311\"\", \"\"city\"\": \"\"Bogotá\"\", \"\"street\"\": \"\"Av. Carrera 28 # 36-41\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 4.62631, \"\"longitude\"\": -74.07716}"] <- "Bogotá"
+
+
+set_D$location_json[set_D$location_json == "{\"\"city\"\": \"\"Barranquilla\"\", \"\"street\"\": \"\"Calle 53B # 46-25\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 10.9892607, \"\"longitude\"\": -74.7904129}"] <- "Barranquilla"
+
+
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"760044\"\", \"\"city\"\": \"\"Santiago de Cali\"\", \"\"street\"\": \"\"Cra 2 # 24 - 46\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 3.4592778775313, \"\"longitude\"\": -76.521745841062}"] <- "Santiago de Cali"                               
+
+
+
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"Bogotá\"\", \"\"country\"\": \"\"Colombia\"\"}"] <- "Bogotá"                                                                                                                                                                                                
+
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"Bogotá\"\", \"\"street\"\": \"\"Carrera 13A #37-32\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 4.62553, \"\"longitude\"\": -74.0681199}"] <- "Bogotá"     
+
+
+
+set_D$location_json[set_D$location_json =="{\"\"latitude\"\": 4.6681852926288, \"\"longitude\"\": -74.063191786408}"] <- "Bogotá"   # close to Bogotá                                                                                                                                                
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"730004\"\", \"\"street\"\": \"\"Calle 12 Cra 3\"\", \"\"located_in\"\": \"\"123688888273361\"\"}"]<- "Ibagué"                                                                                                                                                
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"190003\"\", \"\"city\"\": \"\"Popayán\"\", \"\"street\"\": \"\"carrera 10 No.6 - 57\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 2.4413800153805, \"\"longitude\"\": -76.609768867493}"]<- "Popayán" 
+                   
+                     
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"73001\"\", \"\"city\"\": \"\"Ibagué\"\", \"\"street\"\": \"\"Carrera 6 #12-09\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 4.4457165383615, \"\"longitude\"\": -75.238961943725}"]<-"Ibagué"                                                 
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"Tuluá\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 4.0853666, \"\"longitude\"\": -76.191163}"]<-"Tuluá"                                                                                                                                      
+set_D$location_json[set_D$location_json == "" ]<-"Unknown"                                                                                                                                                                                                                                                                 
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"Bogotá\"\", \"\"street\"\": \"\"Cra. 45 No 26 - 33\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 4.6405898282381, \"\"longitude\"\": -74.093341827393, \"\"located_in\"\": \"\"355927011187065\"\"}"]<-"Bogotá"                   
+                     
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"111121\"\", \"\"city\"\": \"\"Bogotá\"\", \"\"street\"\": \"\"Calle 103 Carrera 69B -43\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 4.6939950943793, \"\"longitude\"\": -74.073777842672}"]<-"Bogotá"
+
+set_D$location_json[set_D$location_json == "{\"\"zip\"\": \"\"11001\"\", \"\"city\"\": \"\"Bogotá\"\", \"\"street\"\": \"\"calle 27 # 4-01\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 4.6138257, \"\"longitude\"\": -74.065835}" ]<-"Bogotá"                                                               
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"11008\"\", \"\"city\"\": \"\"Neiva\"\", \"\"street\"\": \"\"Calle 11 # 5 - 101\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 2.9301014, \"\"longitude\"\": -75.2890801}"]<-"Neiva"                                                             
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"705050\"\", \"\"city\"\": \"\"El Roble\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 9.102829231772, \"\"longitude\"\": -75.195089751112}"]<-"El Roble"                                                                                           
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"San Andrés\"\", \"\"street\"\": \"\"Centro Comercial New Point Local 229\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 12.582824104708, \"\"longitude\"\": -81.690747141838}"]<-"San Andrés"
+
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"La Paz\"\", \"\"street\"\": \"\"5946\"\", \"\"country\"\": \"\"Bolivia\"\", \"\"latitude\"\": -16.495999565734, \"\"longitude\"\": -68.132022321238}" ]<-"La Paz (Bolivia)"                                                                                          
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"08001\"\", \"\"city\"\": \"\"Barranquilla\"\", \"\"street\"\": \"\"Calle 59 # 55 - 168\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 10.9924359095, \"\"longitude\"\": -74.792468527}" ]<-"Barranquilla"
+
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"El Zulia\"\", \"\"street\"\": \"\"Calle 5 6-29 Centro El Zulia\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 4.2149431413907, \"\"longitude\"\": -71.71875}" ]<-"El Zulia"                                                                       
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"Bogotá\"\", \"\"street\"\": \"\"Calle 37 # 13A - 19\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 4.625089549875, \"\"longitude\"\": -74.068668408125}" ]<-"Bogotá"                                                                            
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"410010\"\", \"\"city\"\": \"\"Neiva\"\", \"\"street\"\": \"\"Calle 8 No. 6-30\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 2.9274463, \"\"longitude\"\": -75.2874127}"]<-"Neiva"                                                              
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"Villavicencio\"\", \"\"street\"\": \"\"Calle 19 #41 26 VILLA MARIA\"\", \"\"country\"\": \"\"Colombia\"\"}"]<-"Villavicencio"                                                                                                                                     
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"Popayán\"\", \"\"country\"\": \"\"Colombia\"\"}"]<-"Popayán"                                                                                                                                                                                                
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"Bogotá\"\", \"\"street\"\": \"\"Avenida Calle 26 No. 68 B-70\"\", \"\"country\"\": \"\"Colombia\"\"}"]<-"Bogotá"                                                                                                                                           
+set_D$location_json[set_D$location_json =="{\"\"street\"\": \"\"Valledupar - Cesar\"\"}"]<-"Valledupar"                                                                                                                                                                                                                      
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"111611\"\", \"\"city\"\": \"\"Bogotá\"\", \"\"street\"\": \"\"Avenida Las Américas #65-82\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 4.6293653, \"\"longitude\"\": -74.1199937}"]<-"Bogotá"                                                  
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"111321\"\", \"\"city\"\": \"\"Bogotá\"\", \"\"street\"\": \"\"Calle 26\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 4.6579435110341, \"\"longitude\"\": -74.104722363307}"]<-"Bogotá"                                                          
+set_D$location_json[set_D$location_json == "{\"\"zip\"\": \"\"050010\"\", \"\"city\"\": \"\"Medellín\"\", \"\"street\"\": \"\"Calle 67 #53-108 Bloque 12-427\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 6.2646594, \"\"longitude\"\": -75.5676804, \"\"located_in\"\": \"\"164561860226839\"\"}"]<-"Medellín"
+
+
+set_D$location_json[set_D$location_json == "{\"\"zip\"\": \"\"000000\"\", \"\"city\"\": \"\"Medellín\"\", \"\"street\"\": \"\"80636\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 6.1782548933741, \"\"longitude\"\": -75.589575286033}"]<-"Medellín"                                                           
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"Medellín\"\", \"\"country\"\": \"\"Colombia\"\"}"]<-"Medellín"                                                                                                                                                                                               
+set_D$location_json[set_D$location_json == "{\"\"city\"\": \"\"Armenia\"\", \"\"street\"\": \"\"Avenida Centenario # 6 - 25\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 4.5364077, \"\"longitude\"\": -75.6629119}"]<-"Armenia"                                                                              
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"Bogotá\"\", \"\"street\"\": \"\"Av. El Dorado No. 66 - 63, piso 5\"\", \"\"country\"\": \"\"Colombia\"\"}"]<-"Bogotá"                                                                                                                                      
+set_D$location_json[set_D$location_json == "{\"\"city\"\": \"\"Cartagena\"\", \"\"street\"\": \"\"Pie del Cerro Cl. 30 No. 17-36 Cartagena, Colombia\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 10.420736839083, \"\"longitude\"\": -75.540170111417}"]<-"Cartagena"   
+                     
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"540006\"\", \"\"city\"\": \"\"Cúcuta\"\", \"\"street\"\": \"\"Avenida 4 # 16-12 Barrio La Playa\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 7.8805042534018, \"\"longitude\"\": -72.501845804155}"]<-"Cúcuta"
+
+set_D$location_json[set_D$location_json == "{\"\"zip\"\": \"\"17001\"\", \"\"city\"\": \"\"Manizales\"\", \"\"street\"\": \"\"Carrera 20 #46-35\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 5.0678052, \"\"longitude\"\": -75.5015746}"]<-"Manizales"                                                       
+
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"Medellín\"\", \"\"street\"\": \"\"Calle 44 # 53 A 11\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 6.245354307171, \"\"longitude\"\": -75.57471547307}"]<-"Medellín"                                                                             
+set_D$location_json[set_D$location_json == "{\"\"city\"\": \"\"Santander de Quilichao\"\", \"\"street\"\": \"\"Calle 5 # 9-38\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 3.008891406939, \"\"longitude\"\": -76.481795310974}"]<-"Santander de Quilichao"                                                                  
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"110111\"\", \"\"city\"\": \"\"Bogotá\"\", \"\"street\"\": \"\"Calle 37 # 13a - 19\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 4.6252, \"\"longitude\"\": -74.06844}"]<-"Bogotá"                                                               
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"San Jacinto\"\", \"\"street\"\": \"\"Calle 20\"\", \"\"country\"\": \"\"Colombia\"\"}"]<-"San Jacinto"                                                                                                                                                          
+set_D$location_json[set_D$location_json =="{\"\"zip\"\": \"\"111321\"\", \"\"city\"\": \"\"Bogotá\"\", \"\"street\"\": \"\"Cra. 45 No. 26-85. Edif. Uriel Gutiérrez. Of. 531\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 4.6409106381132, \"\"longitude\"\": -74.088277816772}"]<-"Bogotá"   
+                     
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"Medellín\"\", \"\"street\"\": \"\"Circular 1a No. 70-01, Campus Laureles, Bloque 6, Piso 7 - Universidad Pontificia Bolivariana\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 6.24292, \"\"longitude\"\": -75.59192}"]<-"Medellín"    
+                     
+set_D$location_json[set_D$location_json == "{\"\"street\"\": \"\"Calle 37 # 13a - 19\"\"}"]<-"Unknown"                                                                                                                                                                                                                     
+set_D$location_json[set_D$location_json == "{\"\"city\"\": \"\"Santiago de Cali\"\", \"\"street\"\": \"\"Calle 7 No 8-44\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 3.4476032478089, \"\"longitude\"\": -76.535332202911}"]<-"Santiago de Cali"                                                                      
+set_D$location_json[set_D$location_json == "{\"\"zip\"\": \"\"111121\"\", \"\"city\"\": \"\"Bogotá\"\", \"\"street\"\": \"\"Calle 103 # 69B-43\"\", \"\"country\"\": \"\"Colombia\"\", \"\"latitude\"\": 4.69452, \"\"longitude\"\": -74.07264}"]<-"Bogotá"                                                               
+set_D$location_json[set_D$location_json =="{\"\"city\"\": \"\"Valledupar\"\", \"\"country\"\": \"\"Colombia\"\"}"]<-"Valledupar"                                                                                                                                                                                             
+set_D$location_json[set_D$location_json == "{\"\"zip\"\": \"\"200001\"\", \"\"city\"\": \"\"Valledupar\"\", \"\"street\"\": \"\"carrera 10 # 16-37\"\", \"\"country\"\": \"\"Colombia\"\"}"]<-"Valledupar"
+
+
+set_D$location_json<- as.factor(set_D$location_json)
+
+unique(levels(set_D$location_json))
+
+
+# Collapse levels into "Bogotá" and "Rest" based on specific locations
+set_D$location_json <- fct_collapse(set_D$location_json,
+  "Bogotá" = c("Bogotá"),
+  "Rest" = c("Armenia", "Barranquilla", "Cartagena", "Cúcuta", "Ibagué", "Neiva", "Pereira", "Popayán", "San Andrés", "San Jacinto", "Tuluá", "Unknown", "Valledupar", "Villavicencio", "El Roble", "El Zulia", "La Paz (Bolivia)", "Manizales", "Medellín", "Santander de Quilichao", "Santiago de Cali"))
+
+
+summary(set_D$location_json)
+```
+
+```{r}
+
+# Characters into factors 
+
+####### Target variable
+
+set_D$label_antagonism <- as.factor(set_D$label_antagonism) # "antagonism","not antagonism"
+
+
+#### Categorical predictors and others
+
+
+
+# Create a new column where only the year is extracted from created_time_post
+
+set_D$year_post <- year(set_D$created_time_post)
+set_D$year_post <- as.factor(set_D$year_post)
+summary(set_D$year_post)
+levels(set_D$year_post)
+
+# Extract the year from 'created_time_post' and count unique posts per year
+set_D_unique_posts_per_year <- set_D %>%
+  mutate(year_post = year(created_time_post)) %>%
+  group_by(year_post) %>%
+  summarize(unique_posts = n_distinct(id_post))
+
+# View the summary
+print(set_D_unique_posts_per_year)
+
+# Create a new column where only the year is extracted from created_time_comment
+
+set_D$year_comment <- year(set_D$created_time_comment)
+set_D$year_comment <- as.factor(set_D$year_comment)
+summary(set_D$year_comment)
+
+
+# Categorical predictors
+
+# status_type
+
+set_D$status_type<-as.factor(set_D$status_type)
+summary(set_D$status_type)
+levels(set_D$status_type)
+
+
+set_D$category <-as.factor(set_D$category)
+set_D$page_name <- as.factor(set_D$page_name)
+
+
+# Others
+
+# label_disagreement
+set_D$label_disagreement <- as.factor(set_D$label_disagreement)
+
+# disagreement
+set_D$disagreement <- as.factor(set_D$disagreement)
+set_D$disagreement  <- ifelse(test=set_D$disagreement == 0, yes="Disagreement", no="Not Disagreement")
+set_D$disagreement <- as.factor(set_D$disagreement)
+
+# antagonism
+set_D$antagonism <- as.factor(set_D$antagonism)
+set_D$antagonism  <- ifelse(test=set_D$antagonism == 0, yes="Antagonism", no="Not Antagonism")
+set_D$antagonism <- as.factor(set_D$antagonism)
+
+# id_page
+
+set_D$id_page <-as.character(set_D$id_page)
+
+
+```
+
+##### Exploration and summaries of variables of interest
+
+```{r}
+
+
+# Exploration and summaries
+
+xtabs(~ label_antagonism + location_json, data=set_D)
+xtabs(~ label_antagonism + year_post, data=set_D)
+xtabs(~ label_antagonism + status_type, data=set_D)
+xtabs(~ label_antagonism + category, data=set_D)
+xtabs(~ label_antagonism + page_name, data=set_D)
+
+
+
+set_D %>%                              	
+        ggplot() +	
+        aes(x = set_D$label_antagonism) +	
+        geom_bar()+
+        theme_minimal() +
+        theme(panel.background = element_rect(fill = "white"))
+
+
+set_D %>%                              	
+        ggplot() +	
+        aes(x = set_D$year_comment) +	
+        geom_bar()+
+        theme_minimal() +
+        theme(panel.background = element_rect(fill = "white"))
+
+
+set_D %>%                              	
+        ggplot() +	
+        aes(x = set_D$status_type) +	
+        geom_bar()+
+        theme_minimal() +
+        theme(panel.background = element_rect(fill = "white"))
+
+set_D %>%                              	
+        ggplot() +	
+        aes(x = set_D$page_name) +	
+        geom_bar()+
+        theme_minimal() +
+        theme(panel.background = element_rect(fill = "white"))
+
+set_D %>%                              	
+        ggplot() +	
+        aes(x = set_D$location_json) +	
+        geom_bar()+
+        theme_minimal() +
+        theme(panel.background = element_rect(fill = "white"))
+
+
+set_D %>%                              	
+        ggplot() +	
+        aes(x = set_D$category) +	
+        geom_bar()+
+        theme_minimal() +
+        theme(panel.background = element_rect(fill = "white"))
+
+
+summary(set_D$label_antagonism)       
+summary(set_D$status_type) 
+summary(set_D$page_name)
+summary(set_D$year_post)
+summary(set_D$year_comment)
+summary(set_D$category)
+summary(set_D$location_json)
+
+unique(set_D$page_name) # 64
+unique(set_D$category) # 19
+unique(set_D$location_json) # 22
+length(unique(set_D$id_post)) # 16,146
+
+
+
+#  Proportions of antagonism and not antagonism
+
+set.seed(42)
+set_D_props<- data.frame(label_antagonism = sample(c("antagonistic", "not antagonistic"), 100, replace = TRUE))
+
+# Calculate proportions
+proportions <- set_D %>%
+  count(label_antagonism) %>%
+  mutate(proportion = n / sum(n))
+
+
+ggplot(proportions, aes(x = label_antagonism, y = proportion, fill = label_antagonism)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Target variable: label_antagonism", y = "Proportion") +
+  theme_minimal()
+```
+
+#### Filtered Set D (clean)
+
+```{r}
+
+                                        # Set D: 1,361,291
+
+
+filtered_set_D <- set_D %>%
+  filter(year_comment %in% c(2020, 2021, 2022)) %>% # 1,356,795  ## year_comment
+  droplevels()
+
+                                                
+filtered_set_D <- filtered_set_D %>%
+  filter(!is.na(post_message) & post_message != "") # 1,349,975   ## post_message
+                                            
+                                          # 15,518 unique posts (153 were removed)
+
+filtered_set_D <- filtered_set_D %>%                             
+  filter(year_post %in% c(2020, 2021, 2022)) %>%     # 1,349,964 ## year_post
+  droplevels()
+
+                                          # 15,509 unique posts (9 were removed)
+```
+
+##### EDA: filtered Set D
+
+```{r}
+
+str(filtered_set_D) # 1,349,964 obs. of  40 variables
+attributes(filtered_set_D)
+length(unique(filtered_set_D$page_name)) # 63 unique pages
+length(unique(filtered_set_D$category)) # 19 different page categories
+length(unique(filtered_set_D$id_post)) # 15,509 unique posts
+length(unique(filtered_set_D$id_comment)) # 1,349,964 unique comments
+length(unique(filtered_set_D$location_json)) # 2 unique page locations
+
+# comment count is dropped
+ 
+filtered_set_D <- filtered_set_D %>% select(-comment_count)
+
+any(is.na(filtered_set_D)) # FALSE
+sum(is.na(filtered_set_D)) # 0
+colSums(is.na(filtered_set_D)) # no NAs
+
+
+filtered_set_D %>%
+        diagnose() %>%
+        select(-unique_count, -unique_rate) %>% 
+        filter(missing_count > 0) %>% 
+        arrange(desc(missing_count))
+
+
+# Time span of posts
+min(filtered_set_D$created_time_post) # Earliest = "2020-01-02 13:56:42 UTC"
+max(filtered_set_D$created_time_post) # Latest = "2022-06-24 13:47:14 UTC"
+
+# Time span of comments
+min(filtered_set_D$created_time_comment) # Earliest = "2020-01-02 14:09:45 UTC"
+max(filtered_set_D$created_time_comment) # Latest = "2022-10-19 00:26:13 UTC"
+```
+
+##### Associated post attributes: numerical predictors
+
+###### data frame by page_name level
+
+```{r}
+# Unique pages and page_like_count    
+unique_pages_data <- unique(filtered_set_D[, c("page_name", "page_like_count")])
+
+# Count of unique id_post published by each page_name
+unique_posts_per_page <- filtered_set_D %>%
+  group_by(page_name) %>%
+  summarise(unique_id_posts = n_distinct(id_post))
+
+# Count how many id_comment are in each id_post, then in each page
+
+id_comment_count <- filtered_set_D %>%
+  group_by(page_name, id_post) %>%
+  summarise(id_comment_count = n_distinct(id_comment)) %>%
+  group_by(page_name) %>%
+  summarise(total_comments = sum(id_comment_count))
+
+
+# Count how many disagreements are in each id_post, then in each page
+
+disagreement_count <- filtered_set_D %>%
+  filter(label_disagreement == "disagreement")  %>%
+  group_by(page_name,id_post) %>%
+  summarise(disagreement_cases = n())  %>% 
+  group_by(page_name) %>%
+  summarise(total_disagreement = sum(disagreement_cases))
+
+
+# Count how many not disagreements are in each id_post, then in each page
+
+not_disagreement_count <- filtered_set_D %>%
+  filter(label_disagreement == "not disagreement")  %>%
+   group_by(page_name,id_post) %>%
+   summarise(not_disagreement_cases = n())%>% 
+   group_by(page_name) %>%
+   summarise(total_not_disagreement = sum(not_disagreement_cases)) 
+
+# Count how many antagonisms are in each id_post, then in each page
+
+antagonism_count <- filtered_set_D %>%
+  filter(label_antagonism == "antagonism") %>%
+    group_by(page_name,id_post)  %>%
+    summarise(antagonism_cases = n())%>% 
+    group_by(page_name) %>%
+    summarise(total_antagonism = sum(antagonism_cases))
+
+
+# Count how many not antagonism are in each id_post, then in each page
+
+not_antagonism_count <- filtered_set_D %>%
+  filter(label_antagonism == "not antagonism") %>%
+    group_by(page_name,id_post)  %>%
+    summarise(not_antagonism_cases = n())%>% 
+    group_by(page_name) %>%
+    summarise(total_not_antagonism = sum(not_antagonism_cases))
+
+
+# Count how many shares have each id_post, then in each page
+
+shares_count <- filtered_set_D %>%
+  distinct(id_post, .keep_all = TRUE) %>%  # Keep only unique id_posts
+  group_by(page_name, id_post) %>%
+  summarise(total_shares = sum(shares, na.rm = TRUE)) %>%
+  summarise(total_shares_unique_posts = sum(total_shares))
+
+
+# Count how many likes in each id_post, then in each page
+
+like_count <- filtered_set_D %>%
+  distinct(id_post, .keep_all = TRUE) %>%  # Keep only unique id_posts
+  group_by(page_name, id_post) %>%
+  summarise(total_like = sum(like_post, na.rm = TRUE)) %>%
+  summarise(total_like_unique_posts = sum(total_like))
+
+
+# Count how many love have each id_post, then in each page
+
+
+love_count <- filtered_set_D %>%
+  distinct(id_post, .keep_all = TRUE) %>%  # Keep only unique id_posts
+  group_by(page_name, id_post) %>%
+  summarise(total_love = sum(love_post, na.rm = TRUE)) %>%
+  summarise(total_love_unique_posts = sum(total_love))
+
+
+# Count how many angry in each id_post, then in each page
+
+angry_count <- filtered_set_D %>%
+  distinct(id_post, .keep_all = TRUE) %>%  # Keep only unique id_posts
+  group_by(page_name, id_post) %>%
+  summarise(total_angry = sum(angry_post, na.rm = TRUE)) %>%
+  summarise(total_angry_unique_posts = sum(total_angry))
+
+# Count how many sad in each id_post, then in each page
+
+sad_count <- filtered_set_D %>%
+  distinct(id_post, .keep_all = TRUE) %>%  # Keep only unique id_posts
+  group_by(page_name, id_post) %>%
+  summarise(total_sad = sum(sad_post, na.rm = TRUE)) %>%
+  summarise(total_sad_unique_posts = sum(total_sad))
+
+# Count how many haha in each id_post, then by page
+
+haha_count <- filtered_set_D %>%
+  distinct(id_post, .keep_all = TRUE) %>%  # Keep only unique id_posts
+  group_by(page_name, id_post) %>%
+  summarise(total_haha = sum(haha_post, na.rm = TRUE)) %>%
+  summarise(total_haha_unique_posts = sum(total_haha))
+
+# Count how many wow in each id_post, then by page
+
+wow_count <- filtered_set_D %>%
+  distinct(id_post, .keep_all = TRUE) %>%  # Keep only unique id_posts
+  group_by(page_name, id_post) %>%
+  summarise(total_wow = sum(wow_post, na.rm = TRUE)) %>%
+  summarise(total_wow_unique_posts = sum(total_wow))
+
+
+
+# The merging
+
+
+combined_data <- unique_pages_data %>% 
+  left_join(unique_posts_per_page, by = "page_name") %>%
+  left_join(id_comment_count, by = "page_name") %>%
+  left_join(not_disagreement_count, by ="page_name") %>% 
+  left_join(disagreement_count, by = "page_name") %>% 
+  left_join(antagonism_count, by = "page_name") %>% 
+  left_join(not_antagonism_count, by = "page_name") %>%
+  left_join(like_count, by = "page_name") %>% 
+  left_join(shares_count, by = "page_name") %>%
+  left_join(love_count, by = "page_name") %>% 
+  left_join(angry_count, by = "page_name") %>% 
+  left_join(sad_count, by = "page_name") %>%
+  left_join(haha_count, by = "page_name") %>%
+  left_join(wow_count, by = "page_name")
+
+
+combined_data <- combined_data %>% mutate(pct_antagonism = (total_antagonism/total_comments)*100)
+
+
+combined_data <- combined_data %>%
+  select(-pct_antagonism) %>%
+  mutate(pct_antagonism = combined_data$pct_antagonism) %>%
+  select(1:4, pct_antagonism, 5:(ncol(combined_data) - 1))
+
+
+combined_data$total_not_disagreement <- combined_data$total_comments - combined_data$total_disagreement
+
+```
+
+###### page_name level correlations
+
+```{r}
+
+######## Pages
+
+# Removing non-numericals and redundant things 
+
+combined_data_corr <- combined_data %>% 
+  select(-page_name, -total_not_disagreement, -total_disagreement, -unique_id_posts, -pct_antagonism)
+
+# Using complete obs
+
+cor_matrix <- cor(combined_data_corr, use = "complete.obs")
+
+
+# Correlation matrix 
+
+cor_matrix_melted <- melt(cor_matrix)
+
+# Heatmap representing the correlation matrix
+
+ggplot(cor_matrix_melted, aes(Var1, Var2, fill = value, label = round(value, 2))) +
+  geom_tile(color = "white") +
+  geom_text(size = 4, color = "black") +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0, limit = c(-1, 1)) +
+  theme_minimal() +
+  labs(x = "", y = "") +
+  coord_fixed() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+
+
+```
+
+###### data frame by id_post level
+
+```{r}
+
+# Unique posts, page_name and page_like_counts    
+unique_posts_data <- unique(filtered_set_D[, c("id_post","page_name", "post_message", "created_time_post")])
+
+
+# Count how many id_comment are in each unique id_post
+
+id_comment_count_in_post <- filtered_set_D %>%
+  group_by(id_post) %>%
+  summarise(id_comment_count_in_post = n_distinct(id_comment)) %>%
+  group_by(id_post) %>%
+  summarise(total_comments_in_post = sum(id_comment_count_in_post))
+
+
+# Count how many disagreements are in each id_post
+
+disagreement_count_in_post <- filtered_set_D %>%
+  filter(label_disagreement == "disagreement") %>%
+  group_by(id_post) %>%
+  summarise(disagreement_cases_in_post = n())
+
+
+# Count how many not disagreements are in each id_post
+
+not_disagreement_count_in_post <- filtered_set_D %>%
+  filter(label_disagreement == "not disagreement") %>%
+  group_by(id_post) %>%
+  summarise(not_disagreement_cases_in_post = n())
+
+# Count how many antagonisms are in each id_post
+
+antagonism_count_in_post <- filtered_set_D %>%
+  filter(label_antagonism == "antagonism") %>%
+  group_by(id_post) %>%
+  summarise(antagonism_cases_in_post = n())
+
+
+# Count how many not antagonism are in each id_post
+
+not_antagonism_count_in_post <- filtered_set_D %>%
+  filter(label_antagonism == "not antagonism") %>%
+  group_by(id_post) %>%
+  summarise(not_antagonism_cases_in_post = n())
+
+
+# Count how many shares have each id_post
+
+shares_count_in_post <- filtered_set_D %>%
+  distinct(id_post, .keep_all = TRUE) %>%  # Keep only unique id_posts
+  group_by(id_post) %>%
+  summarise(total_shares = sum(shares, na.rm = TRUE))
+
+
+# Count how many likes in each id_post
+
+like_count_in_post <- filtered_set_D %>%
+  distinct(id_post, .keep_all = TRUE) %>%  # Keep only unique id_posts
+  group_by(id_post) %>%
+  summarise(total_like = sum(like_post, na.rm = TRUE))
+
+
+# Count how many love have each id_post
+
+
+love_count_in_post <- filtered_set_D %>%
+  distinct(id_post, .keep_all = TRUE) %>%  # Keep only unique id_posts
+  group_by(id_post) %>%
+  summarise(total_love = sum(love_post, na.rm = TRUE))
+
+
+# Count how many angry in each id_post
+
+angry_count_in_post <- filtered_set_D %>%
+  distinct(id_post, .keep_all = TRUE) %>%  # Keep only unique id_posts
+  group_by(id_post) %>%
+  summarise(total_angry = sum(angry_post, na.rm = TRUE))
+
+# Count how many sad in each id_post
+
+sad_count_in_post <- filtered_set_D %>%
+  distinct(id_post, .keep_all = TRUE) %>%  # Keep only unique id_posts
+  group_by(id_post) %>%
+  summarise(total_sad = sum(sad_post, na.rm = TRUE))
+
+# Count how many haha in each id_post, then by page
+
+haha_count_in_post <- filtered_set_D %>%
+  distinct(id_post, .keep_all = TRUE) %>%  # Keep only unique id_posts
+  group_by(id_post) %>%
+  summarise(total_haha = sum(haha_post, na.rm = TRUE))
+
+# Count how many wow in each id_post, then by page
+
+wow_count_in_post <- filtered_set_D %>%
+  distinct(id_post, .keep_all = TRUE) %>%  # Keep only unique id_posts
+  group_by(id_post) %>%
+  summarise(total_wow = sum(wow_post, na.rm = TRUE)) 
+
+
+# The merging
+
+
+combined_data_posts <- unique_posts_data %>% 
+  left_join(id_comment_count_in_post, by = "id_post") %>%
+  left_join(not_disagreement_count_in_post, by= "id_post") %>% 
+  left_join(disagreement_count_in_post, by = "id_post") %>%
+  left_join(antagonism_count_in_post, by = "id_post") %>% 
+  left_join(not_antagonism_count_in_post, by = "id_post") %>%
+  left_join(like_count_in_post, by = "id_post") %>% 
+  left_join(shares_count_in_post, by = "id_post") %>%
+  left_join(love_count_in_post, by = "id_post")%>%
+  left_join(angry_count_in_post, by = "id_post")%>%
+  left_join(sad_count_in_post, by = "id_post")%>%
+  left_join(haha_count_in_post, by = "id_post")%>%
+  left_join(wow_count_in_post, by = "id_post")
+
+
+
+combined_data_posts <- combined_data_posts %>%
+  mutate(pct_antagonism_posts = case_when(
+    total_comments_in_post > 0 & !is.na(total_comments_in_post) & !is.na(antagonism_cases_in_post) ~ 
+      (antagonism_cases_in_post / total_comments_in_post) * 100,
+    TRUE ~ 0
+  ))
+
+combined_data_posts <- combined_data_posts %>%
+  select(-pct_antagonism_posts) %>%
+  mutate(pct_antagonism_posts = combined_data_posts$pct_antagonism_posts) %>%
+  dplyr::select(1:5, pct_antagonism_posts, 6:(ncol(combined_data_posts) - 1))
+
+
+######################################################  PREVALENCE 
+
+combined_data_posts$prevalence <- ifelse(combined_data_posts$pct_antagonism_posts > 50, "prevalent", "not prevalent")
+
+
+combined_data_posts$prevalence <- as.factor(combined_data_posts$prevalence)
+
+
+############################################################################
+
+```
+
+###### id_post level correlations
+
+```{r}
+
+
+######## Posts
+
+
+# Removing non-numericals
+
+combined_data_corr_posts <- combined_data_posts %>% 
+  select(-page_name, -post_message, -id_post, -pct_antagonism_posts, -not_disagreement_cases_in_post, -disagreement_cases_in_post, -created_time_post, -prevalence)
+
+# Using complete obs
+
+cor_matrix_posts <- cor(combined_data_corr_posts, use = "complete.obs")
+
+
+# Correlation matrix
+
+cor_matrix_melted_posts <- melt(cor_matrix_posts)
+
+
+# Heatmap representing the correlation matrix
+
+ggplot(cor_matrix_melted_posts, aes(Var1, Var2, fill = value, label = round(value, 2))) +
+  geom_tile(color = "white") +
+  geom_text(size = 4, color = "black") +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0, limit = c(-1, 1)) +
+  theme_minimal() +
+  labs(x = "", y = "") +
+  coord_fixed() +
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1))
+
+# Coefficient of determination 
+
+cor_matrix_melted_posts_squared <-cor_matrix_melted_posts %>%
+  mutate(R_squared_100 = (value^2)*100)
+
+cor_matrix_melted_posts_squared
+```
+
+##### 
+
+##### Message-based: numerical predictors
+
+```{r}
+
+# Renaming
+
+mess_num_pre <- combined_data_posts 
+
+```
+
+```{r}
+
+
+library(udpipe)
+
+# Pre_train models in Spanish
+ud_model <- udpipe_download_model(language = "spanish")
+ud_model <- udpipe_load_model(ud_model$file_model)
+
+
+
+# Cleaning parameters
+
+clean_text <- function(text) {
+  text <- tolower(text) # to lowercase
+  text <- str_replace_all(text, "\\d+", "")# no numbers
+  text <- str_replace_all(text, "[[:punct:]]", "") # no characters nor punctuation
+  text <- str_replace_all(text, "\\s+", " ")  # no additional spaces
+  text <- gsub("[^[:alpha:] ]", "", text) # only alphabetic 
+  return(text)} # clean text
+
+
+# Clean "post_message"
+
+mess_num_pre$cleaned_message <- sapply(mess_num_pre$post_message, clean_text)
+
+# Linguistic analysis 
+parsed_text_test <- udpipe_annotate(ud_model, x = mess_num_pre$cleaned_message)
+parsed_text_test <- as.data.frame(parsed_text_test)
+
+
+# Creating new columns with counts
+parsed_text_test <- parsed_text_test %>%
+  group_by(doc_id) %>%
+  mutate(count_VERB = sum(upos == "VERB", na.rm = TRUE),
+         count_ADV = sum(upos == "ADV", na.rm = TRUE),
+         count_NOUN = sum(upos == "NOUN", na.rm = TRUE),
+         count_PROPN = sum(upos == "PROPN", na.rm = TRUE),
+         count_ADP = sum(upos == "ADP", na.rm = TRUE),
+         count_DET = sum(upos == "DET", na.rm = TRUE),
+         count_PRON = sum(upos == "PRON", na.rm = TRUE),
+         count_CONJ = sum(upos == "CONJ", na.rm = TRUE),
+         count_ADJ = sum(upos == "ADJ", na.rm = TRUE),
+         count_token = sum(!is.na(token)))
+
+sum(is.na(parsed_text_test$upos)) # this varies in test # 20,591 unidentified cases 
+sum(is.na(parsed_text_test$token)) # 0 NA always 
+
+token_frequency <- parsed_text_test %>%
+  filter(!is.na(token)) %>%
+  count(token, sort = TRUE)
+
+
+# Just one row by doc_id
+
+unique_rows <- parsed_text_test %>%
+  distinct(doc_id, .keep_all = TRUE)
+
+
+# Changing doc_id with id_post
+unique_rows$doc_id <- mess_num_pre$id_post
+
+# Renaming
+
+unique_rows <- unique_rows %>%
+  rename(id_post = doc_id)
+
+```
+
+##### Message-based categorical predictors
+
+```{r}
+
+# War concepts
+
+custom_list <- c("_comite_del_paro_",
+                 "_comité_del_paro_",
+                 "_conflictividad_",
+                 "_conflicto_ AND plebiscito_",
+                 "_conflicto_armado_",
+                 "_cultivo AND _ilicito",
+                 "_cultivo AND _ilícito",
+                 "_disturbio",
+                 "_grupo AND _armado",
+                 "_guerra_",
+                 "_lider AND _asesin",
+                 "_líder AND _asesin",
+                 "_lider AND _masacr",
+                 "_líder AND _masacr",
+                 "_manifest AND _bogota_",
+                 "_manifest AND _bogotá_",
+                 "_memoria AND _conflicto_",
+                 "_paro_",
+                 "_protesta",
+                 "_terroris",
+                 "desmoviliza",
+                 "disidencia",
+                 "eln",
+                 "excombatiente",
+                 "exguerriller",
+                 "farc",
+                 "mina AND _antipersonal",
+                 "paramilitar")
+
+
+check_war_concepts <- function(text) {
+  matches <- sapply(custom_list, function(pattern) grepl(pattern, text, ignore.case = TRUE))
+  any(matches)
+}
+
+
+unique_rows$war_concept <- sapply(unique_rows$sentence, check_war_concepts)
+
+
+
+# Sentiment
+
+library(syuzhet)
+
+
+sent<- get_nrc_sentiment(unique_rows$sentence, lang="spanish")
+
+sentiment_scores <- cbind(id_post = unique_rows$id_post, sent)
+
+
+sentiment_scores <- sentiment_scores %>%
+  mutate(Sentiment = case_when(
+    negative > positive ~ "More negative words",
+    positive > negative ~ "More positive words",
+    TRUE ~ "Equal"  # Condition when negative and positive are equal
+  ))
+
+sentiment_scores$Sentiment<- as.factor(sentiment_scores$Sentiment)
+
+unique_rows <- left_join(unique_rows, sentiment_scores)
+
+
+unique_rows$war_concept<- as.factor(unique_rows$war_concept)
+
+```
+
+#### 
+
+### The big join
+
+```{r}
+
+# "year"_post is already in filtered_set_D
+# "page_like_count" is already in filtered_set_D
+# "location_json" is already in filtered_set_D
+
+# Post attributes (numerical)
+
+combined_data_posts_to_join <- combined_data_posts %>% select(-not_disagreement_cases_in_post, -disagreement_cases_in_post, created_time_post)
+
+# Message_based (numerical)
+
+unique_rows_to_join <- unique_rows %>% select(-paragraph_id, -sentence_id,   -sentence, -token_id, -token, -lemma, -upos, -xpos , -feats, -head_token_id, -dep_rel, -deps, -misc, -count_CONJ, -anger, -anticipation, -disgust,      
+-fear,-joy,-sadness,-surprise, -trust, -negative, -positive)
+
+
+# The big join
+
+the_big_join <- left_join(combined_data_posts_to_join, unique_rows_to_join, by = "id_post")
+
+
+collapsed_filtered_set_D <- distinct(filtered_set_D, id_post, .keep_all = TRUE)
+
+
+
+the_big_join <- merge(the_big_join, collapsed_filtered_set_D[, c("id_post", "year_post", "page_like_count", "location_json")], by = "id_post", all.x = TRUE)
+
+the_big_join <- the_big_join %>% distinct(id_post, .keep_all = TRUE)
+
+```
+
+### Binary Logistic Regression Modeling
+
+#### Descriptive statistics
+
+```{r}
+
+require(rms)
+library(gtsummary)
+library(gt)
+
+
+# Predictors
+
+
+preds_22 <- the_big_join %>% select(prevalence,
+                                    count_token,
+                                    count_VERB, 
+                                    count_ADV, 
+                                    count_NOUN, 
+                                    count_PROPN, 
+                                    count_ADP, 
+                                    count_DET, 
+                                    count_PRON, 
+                                    count_ADJ, 
+                                    year_post,  
+                                    total_comments_in_post, 
+                                    total_like, total_shares, 
+                                    total_love, total_angry, 
+                                    total_sad, total_haha,
+                                    total_wow, page_like_count, 
+                                    location_json,
+                                    war_concept,
+                                    Sentiment)
+
+preds_four_cat <- the_big_join %>% select(prevalence, year_post,  
+                                    location_json, 
+                                    war_concept,
+                                    Sentiment)
+
+## from: https://www.r-bloggers.com/2021/01/creating-beautiful-and-flexible-summary-statistics-tables-in-r-with-gtsummary/
+
+my_theme <-   
+  list(
+    "tbl_summary-str:default_con_type" = "continuous2",
+    "tbl_summary-str:continuous_stat" = c(
+     "{median} ({p25} - {p75})",
+      "{mean} ({sd})" ,
+      "{min} - {max}"
+    ),
+    "tbl_summary-str:categorical_stat" = "{n} / {N} ({p}%)",
+    "style_number-arg:big.mark" = ",",
+    "tbl_summary-fn:percent_fun" = function(x) style_percent(x, digits = 3)
+  )
+
+
+gtsummary::set_gtsummary_theme(my_theme)
+
+
+o_o <- gtsummary::tbl_summary(
+                              preds_22, 
+                              by = prevalence) %>% 
+                              bold_labels() %>%
+                              modify_header(label ~ "**Variable**")
+
+o_four <- gtsummary::tbl_summary(
+                              preds_four_cat, 
+                              by = prevalence) %>% 
+                              bold_labels() %>%
+                              modify_header(label ~ "**Variable**")
+
+print(o_o)
+
+
+print(o_four)
+
+```
+
+#### Last histogram
+
+```{r}
+
+# Posts per day filtered SET D
+plot_unique_posts_filtered_set_D <- filtered_set_D %>% distinct(created_time_post)
+
+
+plot_88 <- ggplot(plot_unique_posts_filtered_set_D, aes(x = as.Date(created_time_post), group = 1)) +
+  geom_histogram(stat = "count", color = "black") +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year", limits = as.Date(c("2020-01-01", "2022-12-31"))) +
+  scale_y_continuous(trans = "sqrt")+
+  labs(x = "Year", y = "Daily volume") +
+  ggtitle("Set D (clean): Creation of Unique News Media Posts (N= 15,509)") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fill = "white"))
+
+
+# Comments per day filtered SET D
+
+
+# Clásico 
+
+plot_89 <- ggplot(filtered_set_D, aes(x = as.Date(created_time_comment))) +
+  geom_histogram(stat = "count", color ="blue" ) +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year", limits = as.Date(c("2020-01-01", "2022-12-31"))) +
+  scale_y_continuous(trans = "sqrt", labels = scales::comma) +
+  labs(x = "Year", y = "Daily volume") +
+  ggtitle("Set D (clean): Only Disagreements on News Media Posts (N= 1,349,964)") +
+  theme_minimal() +
+  theme(panel.background = element_rect(fill = "white"))
+
+
+plot_90 <- ggplot(filtered_set_D, aes(x = as.Date(created_time_comment), fill = label_antagonism)) +
+  geom_histogram(stat = "count", binwidth = 30, alpha = 0.8) +
+  scale_x_date(date_labels = "%Y", date_breaks = "1 year", limits = as.Date(c("2020-01-01", "2022-12-31"))) +
+  scale_y_continuous(trans = "sqrt", breaks = c(30000), labels = scales::comma) +
+  labs(x = "Year", y = "Daily volume") +
+  ggtitle("Set D (clean): By Type of Disagreement on News Media Posts (N= 1,349,964)") +
+  facet_wrap(~ label_antagonism, ncol = 1) +
+  theme_minimal() +
+  theme(panel.background = element_rect(fill = "white"))
+
+
+
+
+
+
+# Combine the plots
+combined_plots_88_89 <- plot_88 + plot_89 + plot_90+ plot_layout(ncol = 1)
+
+print(combined_plots_88_89)
+```
+
+#### Last proportion
+
+```{r}
+
+
+
+# Calculate proportions
+proportions_clean <- filtered_set_D %>%
+  count(label_antagonism) %>%
+  mutate(proportion = n / sum(n))
+
+
+ggplot(proportions_clean, aes(x = label_antagonism, y = proportion, fill = label_antagonism)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Target variable: Type of Disagreement", y = "Proportion") +
+  theme_minimal
+
+
+# Calculate proportions
+proportions_clean_prevalence <- the_big_join %>%
+  count(prevalence) %>%
+  mutate(proportion = n / sum(n))
+
+
+ggplot(proportions_clean_prevalence, aes(x = prevalence, y = proportion, fill = prevalence)) +
+  geom_bar(stat = "identity") +
+  labs(x = "Target variable: Prevalence of Antagonism", y = "Proportion") +
+  theme_minimal()
+
+
+```
+
+#### Last summary statistics on comments made
+
+```{r}
+
+
+# Convert 'created_time_comment' to Date format
+filtered_set_D <- filtered_set_D %>%
+  mutate(created_time_comment = as.Date(created_time_comment))
+
+# Compute total comments per month
+comments_per_month <- filtered_set_D %>%
+  mutate(month = lubridate::month(created_time_comment, label = TRUE),
+         year = lubridate::year(created_time_comment)) %>%
+  count(year, month, name = "total_comments") %>%
+  arrange(year, desc(total_comments))
+
+
+
+# Calculate the total number of comments
+total_comments <- nrow(filtered_set_D)
+
+# Calculate the number of days covered in the dataset
+start_date <- min(filtered_set_D$created_time_comment)
+end_date <- max(filtered_set_D$created_time_comment)
+total_days <- as.numeric(end_date - start_date) + 1  # Add 1 to include the last day
+
+# Calculate the average comments per day
+avg_comments_per_day <- total_comments / total_days
+
+
+# More stats on days 
+
+filtered_set_D$X<- as.character(filtered_set_D$X)
+
+comments_per_day <- aggregate(X ~ created_time_comment, data = filtered_set_D, FUN = function(x) length(unique(x)))
+
+
+## ant per day
+
+antagonism_per_day <- aggregate(label_antagonism ~ created_time_comment, data = subset(filtered_set_D, label_antagonism == "antagonism"), FUN = length)
+
+## not ant per day
+
+not_antagonism_per_day <- aggregate(label_antagonism ~ created_time_comment, data = subset(filtered_set_D, label_antagonism == "not antagonism"), FUN = length)
+
+
+summary(comments_per_day)
+
+```
+
+#### Last summaries
+
+```{r}
+
+sum(the_big_join$pct_antagonism_posts==100)
+
+summary(the_big_join$pct_antagonism_posts)
+```
+
+### Training and test sets
+
+```{r}
+library(vip)
+library(rsample)
+
+set.seed(369)
+tra_test <- the_big_join %>%
+    initial_split(prop = 0.75)
+
+tra_test
+
+set.seed(369)
+training_set <- training(tra_test)
+
+testing_set<- testing(tra_test)
+
+```
+
+```{r}
+
+
+# Defining the model formula and data
+formula <- prevalence ~ count_token + count_VERB + count_ADV + count_NOUN + count_PROPN + count_ADP + count_DET + count_PRON + count_ADJ + year_post + total_comments_in_post + total_like + total_shares + total_love + total_angry + total_sad + total_haha + total_wow + page_like_count + location_json + war_concept + Sentiment
+
+# Defining the model
+model_k <- glm(formula, family = binomial(), data = training_set)
+
+# Performing k-fold cross-validation
+k <- 10  # Number of folds
+set.seed(123)  # For reproducibility
+cv_results <- train(
+  formula,
+  data = training_set,
+  method = "glm",
+  trControl = trainControl(method = "cv", number = k)
+)
+
+# Accessing cross-validation results
+summary(cv_results)
+
+```
+
+#### Model 1: NULL
+
+```{r}
+
+library (tidymodels)
+
+modelnull <- logistic_reg() %>%
+    set_engine("glm") %>%
+    fit(prevalence ~ 1 , data = training(tra_test))
+
+model_null<- modelnull
+
+model_null
+
+
+ model1 = glm(prevalence ~ 1, 	
+              family = binomial(), data = training_set)	
+
+ summary(model1)
+```
+
+#### Model 2: Message-based prediction
+
+```{r}
+
+
+model_message<- logistic_reg() %>%
+    set_engine("glm") %>%
+    fit(prevalence ~ count_token + count_VERB + count_ADV + count_NOUN + count_PROPN + count_ADP + count_DET + count_PRON + count_ADJ + war_concept + Sentiment, data = training(tra_test))
+
+model_message
+
+model2 = glm(prevalence ~ count_token + count_VERB + count_ADV + count_NOUN + count_PROPN + count_ADP + count_DET + count_PRON + count_ADJ + war_concept + Sentiment, 	
+              family = binomial(), data = training_set)
+ summary(model2)
+
+```
+
+#### Model 3: Associated attributes prediction
+
+```{r}
+
+model_attributes<- logistic_reg() %>%
+    set_engine("glm") %>%
+    fit(prevalence ~ year_post + total_comments_in_post + total_like +  total_shares + total_love + total_angry + total_sad + total_haha + total_wow, data = training(tra_test))
+
+model_attributes
+
+model3 = glm(prevalence ~ year_post + total_comments_in_post + total_like +  total_shares + total_love + total_angry + total_sad + total_haha + total_wow, 	
+             family = binomial(), data = training_set)
+
+summary(model3)
+
+
+
+```
+
+#### Model 4: Page-related
+
+```{r}
+
+model_page<- logistic_reg() %>%
+    set_engine("glm") %>%
+    fit(prevalence ~ page_like_count + location_json, data = training(tra_test))
+
+model_page
+
+
+
+ model4 = glm(prevalence ~ page_like_count + location_json, 	
+              family = binomial(), data = training_set)
+ summary(model4)
+
+
+```
+
+#### Model 5: Complete
+
+```{r}
+
+
+model_ALL<- logistic_reg() %>%
+    set_engine("glm") %>%
+    fit(prevalence ~ count_token + count_VERB + count_ADV + count_NOUN + count_PROPN + count_ADP + count_DET + count_PRON + count_ADJ + year_post + total_comments_in_post + total_like +  total_shares + total_love + total_angry + total_sad + total_haha + total_wow + page_like_count + location_json + war_concept + Sentiment, data = training(tra_test))
+
+model_ALL
+
+ model5 = glm(prevalence ~ count_token + count_VERB + count_ADV + count_NOUN + count_PROPN + count_ADP + count_DET + count_PRON + count_ADJ + year_post + total_comments_in_post + total_like +  total_shares + total_love + total_angry + total_sad + total_haha + total_wow + page_like_count + location_json + war_concept + Sentiment,
+              family = binomial(), data = training_set)
+ summary(model5)
+
+
+```
+
+### Goodness of fit
+
+#### AIC and BIC
+
+```{r}
+
+
+# Akaike Information Criterion (AIC)
+
+AIC(model1, model5)	# Our model has an AIC of more than 2 points lower 
+# than the Null model, which makes it significantly better
+# at the prediction accuracy. 
+
+
+model_list <- list(model1, model2, model3, model4, model5)
+
+
+aic_values <- map_dbl(model_list, ~ summary(.)$aic)
+
+
+aic_df <- tibble(Model = paste0("model", 1:5), AIC = aic_values)
+
+print(aic_df)
+
+
+BIC(model1)
+BIC(model2)
+BIC(model3)
+BIC(model4)
+BIC(model5)
+```
+
+#### Pseudo R2
+
+```{r}
+
+### Various annotations and source codes
+
+r2.null <- model1$deviance/-2
+
+r2.model5<- model5$deviance/-2
+
+print(r2.null) 
+
+print(r2.model5) 
+
+(r2.null - r2.model5) / r2.null 
+
+
+pR2(model1)
+pR2(model5)
+
+
+
+
+# -2LL, deviance	
+
+pR2(model5)["llh"] * -2	  # **-2 Log Likelihood (-2LL)**
+
+pR2(model1)
+
+pR2(model1)["llh"] * -2
+
+
+# Our model:  llh  , -2llh  
+# Null model: llh  , -2llh  
+```
+
+#### Chi-square
+
+```{r}
+
+lrtest(model1, model5)
+
+# L.R. Chisq       d.f.          P 
+#   1046.812     24.000      0.000 
+```
+
+### Effectiveness: prediction accuracy for categorization
+
+```{r}
+
+
+#### TESTING SET
+
+
+# Predicted log odds for all comments
+
+
+set_D_ps = testing_data %>% 
+        mutate(log_odds = predict(model5))
+
+
+
+# Predicted probabilities for all comments
+
+set_D_ps = the_big_join %>% 
+        mutate(probs = exp(predict(model5)) / (1 + exp(predict(model5)))) %>% 
+        mutate(probs = probs *100 )
+
+hist(set_D_ps$probs)
+
+```
+
+```{r}
+
+# Code taken from https://github.com/business-science/free_r_tips/blob/master/015_logistic_regression/015_logistic_regression.R
+
+### Another better way
+########## TESTING
+
+prediction_class_test <- predict(model_ALL, new_data = testing(tra_test), type = "class")
+
+prediction_prob_test  <- predict(model_ALL, new_data = testing(tra_test), type = "prob")
+
+results_tbl <- bind_cols(
+    prediction_class_test,
+    prediction_prob_test,
+    testing(tra_test)
+)
+
+
+
+# the prediction matches the prevalence?
+predos <- testing_data %>% mutate(correct_prediction = ifelse(.pred_class == prevalence, "Correct", "Incorrect"))
+
+# counts and percentages of correct predictions for each match
+prediction_summary <- predos %>%
+  count(correct_prediction) %>%
+  mutate(percentage = prop.table(n) * 100)
+
+
+
+prediction_summary_2 <- predos %>%
+  group_by(prevalence, correct_prediction) %>%
+  summarise(count = n()) %>%
+  group_by(prevalence) %>%
+  mutate(percentage = count / sum(count) * 100)
+
+# table
+prediction_summary_2
+
+```
+
+### Area under the curve (AUC)
+
+```{r}
+
+# Code taken from https://github.com/business-science/free_r_tips/blob/master/015_logistic_regression/015_logistic_regression.R
+
+library(pROC)
+
+overall_auc <- roc(results_tbl$prevalence, results_tbl$.pred_prevalent)$auc
+
+overall_auc
+
+
+ results_tbl %>%
+   roc_curve(prevalence, ".pred_not prevalent") %>%
+   autoplot(
+       options = list(
+          smooth = TRUE
+      )
+  ) +
+    labs(title = "Area Under the Curve (AUC): 0.68")
+
+
+```
+
+### Importance of predictors
+
+```{r}
+
+
+## Contribution of predictors  
+
+library(domir)
+library(relaimpo)
+
+
+# Calculate odds ratios and their confidence intervals
+odds_ratios <- exp(coef(model5))  # Calculate odds ratios
+conf_intervals <- confint(model5)  # Calculate confidence intervals
+
+# Combine odds ratios and confidence intervals into a data frame
+odds_df <- data.frame(
+  Odds_Ratio = odds_ratios,
+  CI_lower = conf_intervals[, 1],  # Lower limit of the confidence interval
+  CI_upper = conf_intervals[, 2]   # Upper limit of the confidence interval
+)
+
+# Display the odds ratios and confidence intervals
+print(odds_df)
+
+
+library(caret)
+
+importance <-varImp(model5)
+
+contributionByLevel(dom_model2, fit.functions="r2.m")
+
+plot(dom_model2, which.graph ="conditional",fit.function = "r2.m")	
+
+averageContribution(dom_model2,fit.functions = "r2.m")	
+
+plot(dom_model2, which.graph ="general",fit.function = "r2.m") + coord_flip()	
+
+```
+
+```{r}
+
+model_ALL$fit %>%
+    vip(
+        num_features = 20,
+        geom         = "point",
+        aesthetics   = list(
+            size     = 4,
+            color    = "black"
+        )
+    ) +
+    theme_minimal(base_size = 18) +
+    labs(title = "Importance of predictors")
+```
+
+```{r}
+
+library(ggplot2)
+
+#  table of prevalence by location_json
+prevalence_count <- the_big_join %>%
+  group_by(prevalence, location_json) %>%
+  summarise(count = n()) %>%
+  mutate(percentage = count / sum(count) * 100)
+
+prevalence_count <- prevalence_count %>%
+  mutate(prevalence = factor(prevalence, levels = c("prevalent", "not prevalent")))
+
+prevalence_count
+
+# Plotting the bar plot
+ggplot(prevalence_count, aes(x = location_json, y = percentage, fill = as.factor(prevalence))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Distribution of Prevalence Status by Location of FB Public Fan Page",
+       x = "Location",
+       y = "Percentage",
+       fill = "Prevalence") +
+  theme_minimal()
+
+```
+
+```{r}
+
+# Predict probabilities on the test/validation set
+testing_set$predicted_prob <- predict(model5, newdata = testing_set, type = "response")
+
+# Convert probabilities to predicted classes (0 or 1) using a threshold (e.g., 0.5)
+testing_set$predicted_class <- ifelse(testing_set$predicted_prob >= 0.5, 1, 0)
+
+# Compute accuracy
+accuracy <- mean(testing_set$predicted_class == testing_set$prevalence)
+
+# Compute confusion matrix
+conf_mat <- table(testing_set$prevalence, testing_set$predicted_class)
+
+# Compute validation set error (misclassification rate)
+validation_error <- 1 - accuracy
+
+# Display validation error and confusion matrix
+print(paste("Validation Set Error:", validation_error))
+print("Confusion Matrix:")
+print(conf_mat)
+
+
+
+```
+
+### Model summary
+
+```{r}
+
+
+library(modelsummary) 
+
+msummary(model5, stars = TRUE)
+
+
+coef_table <- tab_model(model5, show.ci = 0.95, show.se =  FALSE, show.std = TRUE, show.stat = TRUE,show.est = TRUE, 
+          show.aic = TRUE,show.dev = TRUE, 
+          show.loglik=TRUE, p.style = c("numeric_stars"))
+
+
+coef_table
+```
